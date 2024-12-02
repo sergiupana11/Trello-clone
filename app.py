@@ -1,42 +1,23 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 from flask_pymongo import PyMongo
-from bson.objectid import ObjectId
+from marshmallow import ValidationError
+from routes.boards import board_routes
+from routes.lists import list_routes
+from routes.cards import card_routes
 
 app = Flask(__name__)
-app.config['MONGO_URI'] = "mongodb://localhost:27017/myDatabase"
+app.config['MONGO_URI'] = "mongodb://localhost:27017/trello_clone"
 mongo = PyMongo(app)
 
-@app.post('/boards')
-def create_board():
-    request_body = request.json
-    id = mongo.db.boards.insert_one({'name': request_body['name'], 'card_lists': []})
-    return jsonify({'id': str(id.inserted_id)})
+# Register blueprints
+app.register_blueprint(board_routes, url_prefix='/boards')
+app.register_blueprint(list_routes, url_prefix='/lists')
+app.register_blueprint(card_routes, url_prefix='/cards')
 
-@app.get('/boards/<id>')
-def get_board(id):
-    board = mongo.db.boards.find_one({'_id': ObjectId(id)})
-    if board is None:
-        return jsonify({'error': 'Board not found'}), 404
-    board['_id'] = str(board['_id'])
-    return jsonify(board)
-
-@app.get('/boards')
-def get_all_boards():
-    boards = mongo.db.boards.find()
-    result = []
-    for board in boards:
-        board['_id'] = str(board['_id'])
-        result.append(board)
-    return result
-
-@app.post('/boards/<board_id>/lists')
-def create_card_for_board(board_id):
-    board = mongo.db.boards.find_one({'_id': ObjectId(board_id)})
-    if board is None:
-        return jsonify({'errror': 'Board not found'}), 404
-    request_body = request.json
-    list = {'title': request_body['name'], 'card_lists': []}
-    
+# Global error handler for Marshmallow validation errors
+@app.errorhandler(ValidationError)
+def handle_validation_error(err):
+    return jsonify({'errors': err.messages}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
