@@ -1,13 +1,13 @@
 from flask import Flask, jsonify
-from flask_pymongo import PyMongo
 from marshmallow import ValidationError
 from routes.boards import board_routes
 from routes.lists import list_routes
 from routes.cards import card_routes
+from extensions import mongo
 
 app = Flask(__name__)
 app.config['MONGO_URI'] = "mongodb://localhost:27017/trello_clone"
-mongo = PyMongo(app)
+mongo.init_app(app)
 
 # Register blueprints
 app.register_blueprint(board_routes, url_prefix='/boards')

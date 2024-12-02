@@ -1,39 +1,13 @@
 from flask import Blueprint, request, jsonify
 from bson.objectid import ObjectId
-from app import mongo
+from extensions import mongo
+from schemas.list_schema import ListSchema
+from schemas.card_schema import CardSchema
+from marshmallow import ValidationError
 
 list_routes = Blueprint('list_routes', __name__)
-
-# Create a new list in a board
-@list_routes.post('/<board_id>/lists')
-def create_list(board_id):
-    data = request.json
-    board = mongo.db.boards.find_one({'_id': ObjectId(board_id)})
-    if not board:
-        return jsonify({'error': 'Board not found'}), 404
-    
-    new_list = {'name': data['name'], 'cards': []}
-    result = mongo.db.lists.insert_one(new_list)
-    list_id = str(result.inserted_id)
-    
-    mongo.db.boards.update_one(
-        {'_id': ObjectId(board_id)},
-        {'$push': {'lists': list_id}}
-    )
-    return jsonify({'id': list_id, 'name': data['name']})
-
-# Get all lists in a board
-@list_routes.get('/<board_id>/lists')
-def get_lists_in_board(board_id):
-    board = mongo.db.boards.find_one({'_id': ObjectId(board_id)})
-    if not board:
-        return jsonify({'error': 'Board not found'}), 404
-    
-    list_ids = board.get('lists', [])
-    lists = list(mongo.db.lists.find({'_id': {'$in': [ObjectId(id) for id in list_ids]}}))
-    for l in lists:
-        l['_id'] = str(l['_id'])
-    return jsonify(lists)
+list_schema = ListSchema()
+card_schema = CardSchema()
 
 # Update a list's name
 @list_routes.put('/<list_id>')
@@ -57,3 +31,39 @@ def delete_list(list_id):
     # Delete the list
     mongo.db.lists.delete_one({'_id': ObjectId(list_id)})
     return jsonify({'message': 'List deleted successfully'})
+
+# Create a new card in a list
+@list_routes.post('/<list_id>/cards')
+def create_card(list_id):
+    data = request.json
+    try:
+        data = card_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify({'errors': err.message})
+    
+    card_list = mongo.db.lists.find_one({'_id': ObjectId(list_id)})
+    if not card_list:
+        return jsonify({'error': 'List not found'}), 404
+    
+    new_card = {'title': data['title'], 'description': data.get('description', ''), 'list_id': list_id}
+    result = mongo.db.cards.insert_one(new_card)
+    card_id = str(result.inserted_id)
+    
+    mongo.db.lists.update_one(
+        {'_id': ObjectId(list_id)},
+        {'$push': {'cards': card_id}}
+    )
+    return jsonify({'id': card_id, 'title': data['title'], 'description': data.get('description', '')})
+
+# Get all cards in a list
+@list_routes.get('/<list_id>/cards')
+def get_cards_in_list(list_id):
+    card_list = mongo.db.lists.find_one({'_id': ObjectId(list_id)})
+    if not card_list:
+        return jsonify({'error': 'List not found'}), 404
+    
+    card_ids = card_list.get('cards', [])
+    cards = list(mongo.db.cards.find({'_id': {'$in': [ObjectId(id) for id in card_ids]}}))
+    for card in cards:
+        card['_id'] = str(card['_id'])
+    return jsonify(cards)

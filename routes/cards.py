@@ -1,39 +1,11 @@
 from flask import Blueprint, request, jsonify
 from bson.objectid import ObjectId
-from app import mongo
+from extensions import mongo
+from schemas.card_schema import CardSchema
+from marshmallow import ValidationError
 
 card_routes = Blueprint('card_routes', __name__)
-
-# Create a new card in a list
-@card_routes.post('/<list_id>/cards')
-def create_card(list_id):
-    data = request.json
-    card_list = mongo.db.lists.find_one({'_id': ObjectId(list_id)})
-    if not card_list:
-        return jsonify({'error': 'List not found'}), 404
-    
-    new_card = {'title': data['title'], 'description': data.get('description', ''), 'list_id': list_id}
-    result = mongo.db.cards.insert_one(new_card)
-    card_id = str(result.inserted_id)
-    
-    mongo.db.lists.update_one(
-        {'_id': ObjectId(list_id)},
-        {'$push': {'cards': card_id}}
-    )
-    return jsonify({'id': card_id, 'title': data['title'], 'description': data.get('description', '')})
-
-# Get all cards in a list
-@card_routes.get('/<list_id>/cards')
-def get_cards_in_list(list_id):
-    card_list = mongo.db.lists.find_one({'_id': ObjectId(list_id)})
-    if not card_list:
-        return jsonify({'error': 'List not found'}), 404
-    
-    card_ids = card_list.get('cards', [])
-    cards = list(mongo.db.cards.find({'_id': {'$in': [ObjectId(id) for id in card_ids]}}))
-    for card in cards:
-        card['_id'] = str(card['_id'])
-    return jsonify(cards)
+card_schema = CardSchema()
 
 # Get details of a card
 @card_routes.get('/<card_id>')
